@@ -80,7 +80,7 @@ func (mux *ServeMux) HandleFunc(pattern string, handler func(ResponseWriter, *Re
 }
 ```
 
-###源码解读-处理client请求
+### 源码解读-处理client请求
 
 http的ListenAndServe方法中创建了一个Server对象，并调用了Server对象的同名方法。Server的ListenAndServe方法中，会调用net.Listen方法对网络连接进行监听，然后将返回的TCP对象传入Serve方法。
 
