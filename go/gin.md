@@ -1,3 +1,13 @@
+
+
+## 参考
+
+https://juejin.cn/post/6844903998869209095
+
+画图 https://www.gliffy.com/
+
+函数类型实现接口 http://c.biancheng.net/view/58.html
+
 ## net/http
 
 ### example
@@ -141,6 +151,182 @@ type HandlerFunc func(ResponseWriter, *Request)
 // ServeHTTP calls f(w, r)
 func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
   f(w, r)
+}
+```
+
+### 源码解读-总结
+
+为了方便理解整个代码逻辑，我们进行如下定义：
+
+```
+handler函数：具有func(w http.ResponseWriter, r *http.Request)签名的函数，处理业务逻辑
+handler处理器：经过HandlerFunc类型转换的handler函数，它实现了ServeHTTP方法的函数。调用ServeHTTP时即调用handler函数本身。
+handler对象：实现了Handler接口ServeHTTP方法的结构
+```
+
+handler处理器和handler对象的差别在于，一个是函数，另外一个是结构，它们都实现了ServeHTTP方法，很多情况下它们的功能类似。
+
+
+
+使用handler处理器作为参数传递给http.ListenAndServe也是可以的，看如下代码，是可以正常运行的。注意HandlerFunc和HandleFunc的区别。
+
+```go
+func sayHelloName(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	for k, v := range r.Form {
+		fmt.Println("key", k)
+		fmt.Println("val: ", strings.Join(v, " "))
+	}
+	fmt.Fprintf(w, "sayHelloName")
+}
+
+func main() {
+	handler := http.HandlerFunc(sayHelloName)
+	err := http.ListenAndServe(":9090", handler)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
+	}
+}
+```
+
+有三种方式可以实现HTTP server，我们建议采用第二种方式，就是显示地实例化一个结构体对象，结构体实现了Handler interface。如果按照这种思路，理解gin框架就非常的容易。
+
+结构体ServeMux和handler处理器函数的连接桥梁就是Handler接口。ServeMux在ServeHTTP方法中实现了寻找注册路由的handler函数。ServeHTTP方法就是真正处理请求和构造响应的地方。
+
+
+
+## Gin框架讲解
+
+Gin框架是在net/http基础上实现的web框架，并且代替了原net/http框架的multiplexer。
+
+要想对Gin框架有个基本的了解，看这几个文件就差不多了。
+
+```
+context.go gin.go routergroup.go tree.go
+```
+
+net/http虽然具有路由功能
+
+
+
+### example
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	engine := gin.Default()
+	engine.Any("/", WebRoot)
+	err := engine.Run(":8899")
+	if err != nil {
+		fmt.Println("Gin Run error")
+	}
+}
+
+func WebRoot(context *gin.Context) {
+	context.String(200, "Hello, gin")
+}
+```
+
+
+
+
+
+### gin.Context
+
+> Context is the most important part of gin.
+
+Context贯穿一个http请求的所有流程，包含全部上下文信息。
+
+### HTML模板渲染
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+func main() {
+	r := gin.Default()
+	r.LoadHTMLGlob("templates/*.tmpl")
+	r.GET("/index", IndexHandler)
+
+	err := r.Run(":8080")
+	if err != nil {
+		fmt.Println("Gin Run error")
+	}
+}
+
+func IndexHandler(c *gin.Context) {
+	c.HTML(http.StatusOK, "index.tmpl", gin.H{
+		"title": "Main website",
+	})
+}
+
+```
+
+
+
+### 测试
+
+main
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func setupRouter() *gin.Engine {
+	r := gin.Default()
+	r.GET("/ping", func(c *gin.Context) {
+		c.String(200, "pong")
+	})
+	return r
+}
+
+func main() {
+	setupRouter()
+
+	err := r.Run(":8080")
+	if err != nil {
+		fmt.Println("Gin Run error")
+	}
+}
+```
+
+test
+
+```go
+package main
+
+import (
+	"net/http"
+	"testing"
+	"net/http/httptest"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestPingRoute(t *testing.T) {
+	router := setupRouter()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/ping", nil)
+	router.ServeHTTP(w, req)
+	
+	assert.Equal(t, 200, w.Code)
+	assert.Equal(t, "pong", w.Body.String())
 }
 ```
 
